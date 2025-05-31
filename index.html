@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Salva l'Acqua - Gioco Minimal</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  /* Stili globali e sfondo */
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    overflow: hidden; /* blocca scroll */
+    /* Assicurati che questo URL sia corretto e accessibile */
+    background: url('https://images.unsplash.com/photo-1547432326-78e709e13b48?q=80&w=1974&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D') no-repeat center center fixed;
+    background-size: cover; /* Assicura che l'immagine copra tutto lo sfondo */
+    font-family: 'Montserrat', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative; /* Per posizionare gli elementi assoluti */
+  }
+
+  /* Overlay per gli stati del gioco (menu, game over) */
+  .game-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6); /* Sfondo scuro semitrasparente */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.4s ease-in-out, visibility 0.4s ease-in-out;
+  }
+
+  .game-overlay.active {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .overlay-content {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 20px;
+    padding: 30px 40px;
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+    text-align: center;
+    max-width: 90%;
+    transform: scale(0.9);
+    opacity: 0;
+    transition: transform 0.4s ease-out, opacity 0.4s ease-out;
+  }
+
+  .game-overlay.active .overlay-content {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  .overlay-content h1 {
+    color: #004d40;
+    font-size: 3em;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 5px rgba(0,0,0,0.1);
+  }
+
+  .overlay-content p {
+    color: #00796b;
+    font-size: 1.2em;
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+
+  /* Bottoni Generici */
+  .button-primary {
+    padding: 15px 40px;
+    font-size: 1.4em;
+    font-weight: 700;
+    color: white;
+    background: linear-gradient(45deg, #00796b, #004d40); /* Gradiente per il bottone */
+    border: none;
+    border-radius: 40px;
+    box-shadow: 0 8px 15px rgba(0,121,107,0.5);
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .button-primary:hover {
+    background: linear-gradient(45deg, #004d40, #00796b);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 20px rgba(0,121,107,0.7);
+  }
+
+  .button-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 5px 10px rgba(0,121,107,0.4);
+  }
+
+  /* Punteggio */
+  #score {
+    position: fixed;
+    top: 15px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 24px;
+    font-weight: 700;
+    color: #004d40;
+    text-shadow: 1px 1px 4px #b2dfdb;
+    user-select: none;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.5);
+    padding: 8px 15px;
+    border-radius: 10px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  }
+
+  /* Messaggi in-game (level up, ecc) */
+  #message {
+    position: fixed;
+    top: 70px;
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 280px;
+    max-width: 80%;
+    height: 50px;
+    line-height: 50px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 20px;
+    color: #00796b;
+    background: #b2dfdbdd;
+    border-radius: 25px;
+    user-select: none;
+    pointer-events: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+    transform: translateX(-50%) translateY(-20px);
+  }
+
+  #message.active {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* Contenitore del gioco */
+  #gameContainer {
+    position: relative;
+    width: 360px;
+    height: 500px;
+    background: transparent; /* RIMOSSO ANCHE QUI, NESSUNO SFONDO FISSO NEL CONTAINER */
+    border-radius: 25px;
+    box-shadow: 0 15px 30px rgba(0,0,0,0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 5;
+    border: 5px solid rgba(255, 255, 255, 0.5);
+    overflow: hidden;
+  }
+
+  /* Canvas - Reso trasparente per far vedere lo sfondo sotto */
+  canvas {
+    background: transparent; /* MOLTO IMPORTANTE: DEVE ESSERE TRASPARENTE! */
+    border-radius: 20px;
+    box-shadow: none;
+    touch-action: none;
+    display: block;
+    width: 340px;
+    height: 440px;
+  }
+
+</style>
+</head>
+<body>
+
+<div id="startMenu" class="game-overlay active">
+  <div class="overlay-content">
+    <h1>💧 Salva l'Acqua 💧</h1>
+    <p>Guida il contenitore per raccogliere le preziose gocce d'acqua ed evita che cadano a terra. Ogni livello aumenta la velocità e la sfida!</p>
+    <button id="startButton" class="button-primary">Inizia a Giocare</button>
+  </div>
+</div>
+
+<div id="gameOverScreen" class="game-overlay">
+  <div class="overlay-content">
+    <h1 id="gameOverTitle"></h1>
+    <p id="gameOverMessage"></p>
+    <p id="finalScore"></p>
+    <button id="restartButton" class="button-primary">Riprova</button>
+  </div>
+</div>
+
+
+<div id="score">Livello: 1 | Gocce raccolte: 0 / 5</div>
+<div id="message"></div>
+<div id="gameContainer">
+  <canvas id="gameCanvas" width="340" height="440"></canvas>
+</div>
+
+<script>
+  const canvas = document.getElementById('gameCanvas');
+  const ctx = canvas.getContext('2d');
+  const scoreDiv = document.getElementById('score');
+  const messageDiv = document.getElementById('message');
+
+  const startMenu = document.getElementById('startMenu');
+  const startButton = document.getElementById('startButton');
+  const gameOverScreen = document.getElementById('gameOverScreen');
+  const gameOverTitle = document.getElementById('gameOverTitle');
+  const gameOverMessage = document.getElementById('gameOverMessage');
+  const finalScoreDiv = document.getElementById('finalScore');
+  const restartButton = document.getElementById('restartButton');
+
+
+  const bucket = {
+    x: canvas.width / 2 - 60,
+    y: canvas.height - 60,
+    width: 120,
+    height: 60,
+    fillLevel: 0, // 0-1 per il riempimento
+    shake: 0, // Per l'effetto di scuotimento
+    shakeIntensity: 2 // Intensità dello scuotimento
+  };
+
+  let drops = [];
+  const maxDrops = 15; // Limita il numero di gocce contemporaneamente sullo schermo
+
+  const baseDropSpeed = 3;
+  let dropSpeed = baseDropSpeed;
+
+  let gameOver = true; // Inizia a true per mostrare il menu iniziale
+
+  let level = 1;
+  let dropsToCollect = 5;
+  let dropsCollected = 0;
+
+  // Variabili per il controllo dei suoni
+  function createDripSound() {
+      try {
+          const ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctxAudio.createOscillator();
+          const gainNode = ctxAudio.createGain();
+
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(1000, ctxAudio.currentTime);
+          gainNode.gain.setValueAtTime(0.1, ctxAudio.currentTime);
+
+          osc.connect(gainNode);
+          gainNode.connect(ctxAudio.destination);
+
+          osc.start();
+
+          osc.frequency.exponentialRampToValueAtTime(300, ctxAudio.currentTime + 0.2);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctxAudio.currentTime + 0.2);
+
+          osc.stop(ctxAudio.currentTime + 0.2);
+          osc.onended = () => ctxAudio.close();
+      } catch (e) {
+          console.warn("AudioContext non supportato o errore riproduzione drip:", e);
+      }
+  }
+
+  function createGameOverSound() {
+      try {
+          const ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctxAudio.createOscillator();
+          const gainNode = ctxAudio.createGain();
+
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(150, ctxAudio.currentTime);
+          gainNode.gain.setValueAtTime(0.2, ctxAudio.currentTime);
+
+          osc.connect(gainNode);
+          gainNode.connect(ctxAudio.destination);
+
+          osc.start();
+          osc.frequency.linearRampToValueAtTime(50, ctxAudio.currentTime + 0.8);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctxAudio.currentTime + 0.8);
+
+          osc.stop(ctxAudio.currentTime + 0.8);
+          osc.onended = () => ctxAudio.close();
+      } catch (e) {
+          console.warn("AudioContext non supportato o errore riproduzione game over:", e);
+      }
+  }
+
+  function createLevelUpSound() {
+      try {
+          const ctxAudio = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctxAudio.createOscillator();
+          const gainNode = ctxAudio.createGain();
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(440, ctxAudio.currentTime);
+          gainNode.gain.setValueAtTime(0.15, ctxAudio.currentTime);
+
+          osc.connect(gainNode);
+          gainNode.connect(ctxAudio.destination);
+
+          osc.start();
+          osc.frequency.exponentialRampToValueAtTime(880, ctxAudio.currentTime + 0.15);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, ctxAudio.currentTime + 0.3);
+
+          osc.stop(ctxAudio.currentTime + 0.3);
+          osc.onended = () => ctxAudio.close();
+      } catch (e) {
+          console.warn("AudioContext non supportato o errore riproduzione level up:", e);
+      }
+  }
+
+
+  function drawBackground() {
+    // Non disegniamo uno sfondo opaco qui, il canvas è trasparente.
+    // L'immagine di sfondo del body è ora visibile.
+    // Manteniamo le onde se vuoi un effetto sopra lo sfondo del body
+    ctx.strokeStyle = '#4db6ac33'; // Colore delle onde leggermente più visibile
+    ctx.lineWidth = 2;
+    for(let y = canvas.height - 50; y < canvas.height; y += 15){
+      ctx.beginPath();
+      for(let x = 0; x <= canvas.width; x += 15){
+        const wave = 3 * Math.sin((x + y*2) * 0.12);
+        ctx.lineTo(x, y + wave);
+      }
+      ctx.stroke();
+    }
+  }
+
+  function drawBucket() {
+    let currentBucketX = bucket.x + (Math.random() * bucket.shake * 2 - bucket.shake);
+    const bucketTopY = bucket.y + 10;
+    const bucketBottomY = bucket.y + bucket.height;
+    const bucketInnerWidth = bucket.width * 0.8; // Base più stretta
+
+    // Corpo del secchio (stile moderno, tipo "cisterna")
+    ctx.beginPath();
+    ctx.moveTo(currentBucketX + (bucket.width - bucketInnerWidth) / 2, bucketBottomY); // Base inferiore sinistra
+    ctx.lineTo(currentBucketX + bucket.width - (bucket.width - bucketInnerWidth) / 2, bucketBottomY); // Base inferiore destra
+    ctx.lineTo(currentBucketX + bucket.width, bucketTopY); // Lato superiore destro (più largo)
+    ctx.lineTo(currentBucketX, bucketTopY); // Lato superiore sinistro (più largo)
+    ctx.closePath();
+
+    let bucketGradient = ctx.createLinearGradient(currentBucketX, bucketTopY, currentBucketX + bucket.width, bucketBottomY);
+    bucketGradient.addColorStop(0, '#556270'); // Grigio scuro
+    bucketGradient.addColorStop(0.5, '#7f8c8d'); // Grigio medio
+    bucketGradient.addColorStop(1, '#556270'); // Grigio scuro
+    ctx.fillStyle = bucketGradient;
+    ctx.fill();
+
+    // Bordo superiore metallico
+    ctx.strokeStyle = '#34495e'; // Grigio molto scuro
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(currentBucketX, bucketTopY);
+    ctx.lineTo(currentBucketX + bucket.width, bucketTopY);
+    ctx.stroke();
+
+    // Indicatore di riempimento (acqua interna)
+    const waterHeight = bucket.fillLevel * (bucket.height - 20); // Altezza dell'acqua
+    if (waterHeight > 0) {
+        const waterY = bucketBottomY - waterHeight - 5; // Posizione Y dell'acqua
+        // Larghezza dell'acqua, che varia con l'altezza
+        const currentWaterWidth = bucketInnerWidth + (bucket.width - bucketInnerWidth) * (waterHeight / (bucket.height - 20));
+        const waterX = currentBucketX + (bucket.width - currentWaterWidth) / 2;
+
+        let waterFillGradient = ctx.createLinearGradient(waterX, waterY, waterX, bucketBottomY);
+        waterFillGradient.addColorStop(0, 'rgba(102, 204, 255, 0.8)'); // Blu acqua chiaro
+        waterFillGradient.addColorStop(1, 'rgba(0, 153, 204, 0.9)'); // Blu acqua scuro
+        ctx.fillStyle = waterFillGradient;
+
+        ctx.beginPath();
+        // Disegna l'acqua come un trapezio che si adatta alla forma del secchio
+        ctx.moveTo(waterX, bucketBottomY);
+        ctx.lineTo(waterX + currentWaterWidth, bucketBottomY);
+        ctx.lineTo(currentBucketX + bucket.width - (currentWaterWidth - bucketInnerWidth)/2, waterY);
+        ctx.lineTo(currentBucketX + (currentWaterWidth - bucketInnerWidth)/2, waterY);
+        ctx.closePath();
+        ctx.fill();
+    }
+
+    // Riduzione progressiva dello scuotimento
+    if (bucket.shake > 0) {
+        bucket.shake = Math.max(0, bucket.shake - 0.5);
+    }
+  }
+
+  function drawDrop(drop) {
+    // Disegno della goccia come un diamante / cristallo
+    const diamondSize = 8; // Metà larghezza/altezza
+    const diamondOffset = 2; // Offset per la punta inferiore
+
+    ctx.beginPath();
+    // Punto superiore
+    ctx.moveTo(drop.x, drop.y - diamondSize);
+    // Lato destro superiore
+    ctx.lineTo(drop.x + diamondSize, drop.y);
+    // Punto inferiore
+    ctx.lineTo(drop.x, drop.y + diamondSize + diamondOffset);
+    // Lato sinistro superiore
+    ctx.lineTo(drop.x - diamondSize, drop.y);
+    ctx.closePath();
+
+    // Gradiente per l'effetto cristallo
+    let gradient = ctx.createLinearGradient(drop.x - diamondSize, drop.y - diamondSize, drop.x + diamondSize, drop.y + diamondSize);
+    gradient.addColorStop(0, 'rgba(173, 216, 230, 0.9)'); // Light blue (luce)
+    gradient.addColorStop(0.3, 'rgba(135, 206, 250, 0.9)'); // Sky blue
+    gradient.addColorStop(0.7, 'rgba(30, 144, 255, 0.9)'); // Dodger blue
+    gradient.addColorStop(1, 'rgba(25, 25, 112, 0.9)'); // Midnight blue (ombra)
+    ctx.fillStyle = gradient;
+    ctx.fill();
+
+    // Bordo sottile per definire la forma
+    ctx.strokeStyle = 'rgba(0, 0, 100, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Piccoli riflessi bianchi per brillantezza
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    ctx.beginPath();
+    ctx.ellipse(drop.x - diamondSize * 0.4, drop.y - diamondSize * 0.4, diamondSize * 0.3, diamondSize * 0.2, -Math.PI / 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(drop.x + diamondSize * 0.2, drop.y - diamondSize * 0.7, diamondSize * 0.2, diamondSize * 0.1, Math.PI / 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function spawnDrop() {
+    if (drops.length >= maxDrops) {
+        return;
+    }
+    const x = Math.random() * (canvas.width - 30) + 15;
+    drops.push({ x: x, y: 0 });
+  }
+
+  function updateScore() {
+    scoreDiv.textContent = `Livello: ${level} | Gocce raccolte: ${dropsCollected} / ${dropsToCollect}`;
+  }
+
+  function showMessage(text) {
+    messageDiv.textContent = text;
+    messageDiv.classList.add('active');
+  }
+
+  function hideMessage() {
+    messageDiv.classList.remove('active');
+  }
+
+  function levelUp() {
+    createLevelUpSound();
+    level++;
+    dropsCollected = 0;
+    dropsToCollect += 3;
+    dropSpeed = baseDropSpeed + (level - 1) * 0.5;
+    showMessage(`🎉 Livello ${level} Raggiunto! Velocità: ${dropSpeed.toFixed(1)} 🎉`);
+    updateScore();
+    setTimeout(hideMessage, 2500);
+  }
+
+  function updateDrops() {
+    for(let i = drops.length - 1; i >= 0; i--) {
+      drops[i].y += dropSpeed;
+
+      // Nuova logica di collisione per il secchio ridisegnato
+      const bucketTopY = bucket.y + 10;
+      const bucketBottomY = bucket.y + bucket.height;
+      const bucketLeft = bucket.x;
+      const bucketRight = bucket.x + bucket.width;
+      // Approssimazione: controlla se la goccia è all'interno della larghezza del secchio
+      // e se la sua parte inferiore ha superato la parte superiore del secchio
+      if (
+        drops[i].x > bucketLeft &&
+        drops[i].x < bucketRight &&
+        drops[i].y + 8 > bucketTopY && // 8 è circa la metà inferiore della goccia diamante
+        drops[i].y < bucketBottomY
+      ) {
+        drops.splice(i, 1);
+        dropsCollected++;
+        updateScore();
+        createDripSound();
+          // Aggiorna il livello di riempimento del secchio
+          bucket.fillLevel = Math.min(1, dropsCollected / dropsToCollect);
+          bucket.shake = bucket.shakeIntensity;
+
+        if(dropsCollected >= dropsToCollect) {
+          levelUp();
+        }
+      }
+      else if(drops[i].y > canvas.height) {
+        drops.splice(i, 1);
+        endGame(false);
+        return;
+      }
+    }
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackground();
+    drawBucket();
+    drops.forEach(drawDrop);
+    updateDrops();
+  }
+
+  function moveBucket(x) {
+    let oldX = bucket.x;
+    bucket.x = x - bucket.width / 2;
+    if(bucket.x < 0) bucket.x = 0;
+    if(bucket.x + bucket.width > canvas.width) bucket.x = canvas.width - bucket.width;
+    if (Math.abs(bucket.x - oldX) > 5) {
+        bucket.shake = bucket.shakeIntensity * 0.5;
+    }
+  }
+
+  canvas.addEventListener('mousemove', e => {
+    if(!gameOver) moveBucket(e.offsetX);
+  });
+
+  canvas.addEventListener('touchmove', e => {
+    if(!gameOver) {
+      e.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      let touch = e.touches[0];
+      let x = touch.clientX - rect.left;
+      moveBucket(x);
+    }
+  }, { passive: false });
+
+  let dropInterval, gameLoop;
+
+  function startGame() {
+    startMenu.classList.remove('active');
+    gameOverScreen.classList.remove('active');
+
+    drops = [];
+    bucket.x = canvas.width / 2 - 60;
+    bucket.fillLevel = 0; // Resetta il riempimento del secchio
+    level = 1;
+    dropsToCollect = 5;
+    dropsCollected = 0;
+    dropSpeed = baseDropSpeed;
+    gameOver = false;
+    updateScore();
+    showMessage(`🚀 Benvenuto! Livello ${level}! Velocità: ${dropSpeed.toFixed(1)} 💧`);
+    setTimeout(hideMessage, 3000);
+
+    clearInterval(dropInterval);
+    clearInterval(gameLoop);
+
+    dropInterval = setInterval(() => {
+      if(!gameOver) spawnDrop();
+    }, 700);
+
+    gameLoop = setInterval(() => {
+      if(!gameOver) draw();
+    }, 1000/30);
+  }
+
+  function endGame(win) {
+    gameOver = true;
+    clearInterval(dropInterval);
+    clearInterval(gameLoop);
+    createGameOverSound();
+
+    if(win) {
+      gameOverTitle.textContent = '🎉 Missione Compiuta! 🎉';
+      gameOverMessage.textContent = 'Hai salvato tutta l\'acqua!';
+    } else {
+      gameOverTitle.textContent = '💧 Ops! Acqua Sprecata! 💧';
+      gameOverMessage.textContent = `Hai perso una goccia al Livello ${level}.`;
+    }
+    finalScoreDiv.textContent = `Gocce raccolte: ${dropsCollected} (Livello Finale: ${level})`;
+    gameOverScreen.classList.add('active');
+  }
+
+  startButton.addEventListener('click', startGame);
+  restartButton.addEventListener('click', startGame);
+
+  window.addEventListener('touchmove', e => {
+    e.preventDefault();
+  }, { passive: false });
+
+</script>
+
+</body>
+</html>
